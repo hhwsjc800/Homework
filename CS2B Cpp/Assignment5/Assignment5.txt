@@ -1,0 +1,328 @@
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <math.h>
+#include <sstream>
+
+using namespace std;
+
+class Complex
+{  
+private:
+   double real;
+   double imag;
+
+public:
+   static const double ZERO_VAL;
+   Complex(double real, double imag);
+   bool setReal(double realVal);
+   bool setImag(double imagVal);
+   double getReal() const;
+   double getImag() const;
+   double modulus() const;
+   Complex reciprocal() const;
+   
+   string toString() const;
+
+   class DivByZeroException {};
+
+   //--operator overloads
+   Complex& operator=(const Complex& complexRHS);
+   bool operator==(const Complex& complexRHS) const;
+
+   friend ostream & operator<<(ostream& ostrm, const Complex& complexObj);
+   friend Complex operator+(const Complex& c1, const Complex& c2);
+   friend Complex operator-(const Complex& c1, const Complex& c2);
+   friend Complex operator* (const Complex& c1, const Complex& c2);
+   friend Complex operator/(const Complex& c1, const Complex& c2);
+   friend bool operator<(const Complex& c1, const Complex& c2);
+   
+};
+
+////////////////////////////////////
+//                                //
+//   Complex Class Definitions    //
+//                                //
+////////////////////////////////////
+
+//---static declarations---
+const double Complex::ZERO_VAL = 0.0000000001;
+
+//--public member functions----
+Complex::Complex(double real = 0, double imag = 0)
+{
+   setReal(real);
+   setImag(imag);
+}
+
+bool Complex::setReal(double realVal)
+{
+   real = realVal;
+   return true;
+}
+
+bool Complex::setImag(double imagVal)
+{
+   imag = imagVal;
+   return true;
+}
+
+double Complex::getReal() const
+{
+   return real;
+}
+
+double Complex::getImag() const
+{
+   return imag;
+}
+
+double Complex::modulus() const
+{
+   return sqrt((real*real) + (imag*imag));
+}
+
+Complex Complex::reciprocal() const
+{
+   if (modulus() <= ZERO_VAL)
+      throw DivByZeroException();
+
+   Complex temp;
+   temp.real = real / (modulus() * modulus());
+   temp.imag = (-1 * imag) / (modulus() * modulus());
+
+   return temp;
+}
+
+string Complex::toString() const
+{
+   string retString, realStr, imagStr;
+   ostringstream cnvrtReal, cnvrtImag;
+
+   //converting real, imaginary parts to string
+   cnvrtReal << real;
+   cnvrtImag << imag;
+   realStr = cnvrtReal.str();
+   imagStr = cnvrtImag.str();
+   retString = "(" + realStr + ", " + imagStr + ")";
+
+   return retString;
+}
+
+//---operator overloads----
+Complex & Complex::operator=(const Complex& complexRHS)
+{
+   if (this != &complexRHS)
+   {
+      this->real = complexRHS.real;
+      this->imag = complexRHS.imag;
+   }
+
+   return *this;
+}
+
+
+ostream & operator<<(ostream& ostrm, const Complex& complexObj)
+{
+   ostrm << complexObj.toString();
+   return ostrm;
+}
+
+Complex operator+(const Complex& c1, const Complex& c2)
+{
+   Complex temp;
+   temp.real = c1.real + c2.real;
+   temp.imag = c1.imag + c2.imag;
+
+   return temp;
+
+}
+
+Complex operator-(const Complex& c1, const Complex& c2)
+{
+   Complex temp;
+   temp.real = c1.real - c2.real;
+   temp.imag = c1.imag - c2.imag;
+
+   return temp;
+}
+
+Complex operator*(const Complex& c1,const Complex& c2)
+{
+   Complex temp;
+   temp.setReal((c1.real*c2.real) - (c1.imag*c2.imag));
+   temp.setImag((c1.real*c2.imag) + (c1.imag*c2.real));
+
+   return temp;
+}
+
+Complex operator/(const Complex& c1, const Complex& c2)
+{
+   Complex temp = c1 * c2.reciprocal();
+   return temp;
+}
+
+bool Complex::operator==(const Complex& complexRHS) const
+{
+   if ((this->real == complexRHS.real) && (this->imag == complexRHS.imag))
+      return true;
+   return false;
+}
+
+
+bool operator<(const Complex& c1, const Complex& c2)
+{
+   if (c1.modulus() < c2.modulus())
+      return true;
+   return false;
+}
+
+//----END Complex CLASS DEFINITIONS-------
+
+int main()
+{
+   double double1 = 3.66, double2 = -0.317;
+   Complex i(0, -1);
+   Complex complex1(3, -3.2223), complex2(-0.004), complex3(-2.3,19), complex4;
+   Complex quotient;
+   
+   //Displaying complex objects with toString
+   cout << "--Complex objects, doubles: \n"
+        << "i: " << i.toString() << endl
+        << "double1, double2: " << double1 << ", " << double2 << endl
+        << "complex1: " << complex1.toString() << endl
+        << "complex2: " << complex2.toString() << endl
+        << "complex3: " << complex3.toString() << endl 
+        << "complex4: " << complex4.toString() << endl << endl;
+
+
+   
+   //Testing mutators, accessors functionality
+   cout << "---Mutator/accessor tests: \n";
+   if (complex1.setReal(100))
+      cout << "Successfully set real of complex1\n";
+   else
+      cout << "Failed to set real part of complex1\n";
+
+   if (complex1.setImag(-0.569))
+      cout << "Successfully set imag of complex1\n";
+   else
+      cout << "Failed to set imag part of complex1\n";
+
+   if (complex2.setReal(0) && complex2.setImag(0))
+      cout << "Successfully set complex2 to (0,0)\n\n";
+   else
+      cout << "Failed to set complex2\n";
+
+   cout << "complex1 real: " << complex1.getReal() << endl
+        << "complex1 imag: " << complex1.getImag() << endl << endl;
+
+   //Throwing exceptions, test overload of << operator
+   cout << "--Exception throw tests. Also overload of << operator:\n";
+   try
+   {
+      cout << complex2.reciprocal();
+   }
+   catch (...)
+   {
+      cout << "\nTried to show 0 reciprocal! (expected)";
+   }
+
+   try
+   {
+      quotient = complex1 / complex2;
+      cout << quotient << endl;
+   }
+   catch (...)
+   {
+      cout << "\n!!!divide by zero exception(expected)!!!\n";
+      quotient = Complex(0);
+   }
+
+   //Testing arithmetic with overloaded operators and doubles
+   cout << "---Testing overloaded operators with arithmetic and doubles:\n";
+
+   cout << "complex1 / double1: " << complex1 / double1 << endl
+      << "complex1 + complex2: " << complex1 + complex2 << endl
+      << "complex2 - double2: " << complex2 - double2 << endl
+      << "complex3 - complex1: " << complex3 - complex1 << endl
+      << "complex3 / complex1: " << complex3 - complex1 << endl
+      << "complex3 * double2: " << complex3 * double2 << endl
+      << "complex3 * complex1" << complex3 * complex1 << endl
+      << "(c3*c1)/(c1*c3): "<< (complex3*complex1)/(complex1*complex3) << endl
+      << "complex1 - complex1: " << complex1 - complex1 << endl << endl;
+
+   //Testing boolean operators:
+   cout << "---Testing boolean operators: \n";
+   if (complex2 < complex1)
+      cout << "complex2 < complex1 (expected)\n";
+   else
+      cout << "complex2 > complex1\n";
+
+   if (complex2 == complex1)
+      cout << "complex2 equal to complex1\n";
+   else
+      cout << "complex2 not equal to complex1 (expected)\n";
+
+   if (complex2 == complex4)
+      cout << "complex2=complex4 (expected)\n\n";
+   else
+      cout << "complex2 != complex4\n\n";
+
+   //Testing assignment: 
+   cout << "---Testing assignment: \n";
+   cout << "Setting c1 = c2, c4=c3" << endl;
+   complex1 = complex2;
+   complex4 = complex3;
+   cout << "complex1, complex2: " << complex1 << ", " << complex2 << endl
+      << "complex3, complex4: " << complex3 << " , " << complex4 << endl;
+
+   int foo;
+   cin >> foo;
+   return 0;
+}
+
+/**** RUN OF ASSIGNMENT5
+
+--Complex objects, doubles:
+i: (0, -1)
+double1, double2: 3.66, -0.317
+complex1: (3, -3.2223)
+complex2: (-0.004, 0)
+complex3: (-2.3, 19)
+complex4: (0, 0)
+
+---Mutator/accessor tests:
+Successfully set real of complex1
+Successfully set imag of complex1
+Successfully set complex2 to (0,0)
+
+complex1 real: 100
+complex1 imag: -0.569
+
+--Exception throw tests. Also overload of << operator:
+
+Tried to show 0 reciprocal! (expected)
+!!!divide by zero exception(expected)!!!
+---Testing overloaded operators with arithmetic and doubles:
+complex1 / double1: (27.3224, -0.155464)
+complex1 + complex2: (100, -0.569)
+complex2 - double2: (0.317, 0)
+complex3 - complex1: (-102.3, 19.569)
+complex3 / complex1: (-102.3, 19.569)
+complex3 * double2: (0.7291, -6.023)
+complex3 * complex1(-219.189, 1901.31)
+(c3*c1)/(c1*c3): (1, 1.38778e-17)
+complex1 - complex1: (0, 0)
+
+---Testing boolean operators:
+complex2 < complex1 (expected)
+complex2 not equal to complex1 (expected)
+complex2=complex4 (expected)
+
+---Testing assignment:
+Setting c1 = c2, c4=c3
+complex1, complex2: (0, 0), (0, 0)
+complex3, complex4: (-2.3, 19) , (-2.3, 19)
+
+*/
