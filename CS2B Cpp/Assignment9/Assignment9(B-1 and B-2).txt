@@ -1,0 +1,1443 @@
+#include <iostream>
+#include <string>
+#include <list>
+using namespace std;
+
+template <typename Object>
+class PrintObject
+{
+public:
+   void operator()(Object obj)
+   {
+      cout << obj << " ";
+   }
+};
+
+//**********ASSIGNMENT BEGINS ON LINE 273***********
+
+// advanced prototype for the FHtreeNode to use to declare a friend
+template <class Object>
+class FHtree;
+
+// ---------------------- FHtreeNode Prototype --------------------------
+template <class Object>
+class FHtreeNode
+{
+   friend class FHtree<Object>;
+
+protected: 
+   FHtreeNode *firstChild, *sib, *prev;
+   Object data;
+   FHtreeNode *myRoot;  // needed to test for certain error
+
+public:
+   FHtreeNode( const Object & d = Object(), 
+      FHtreeNode *sb = NULL, FHtreeNode *chld = NULL, FHtreeNode *prv = NULL )
+      : firstChild(chld), sib(sb), prev(prv), data(d), myRoot(NULL)
+   { }
+   Object GetData() const { return data; }
+
+protected:
+   // for use only by FHtree
+   FHtreeNode( const Object & d, 
+      FHtreeNode *sb, FHtreeNode *chld, FHtreeNode *prv,
+      FHtreeNode *root )
+      : firstChild(chld), sib(sb), prev(prv), data(d), myRoot(root)
+   { }
+}; 
+
+// --------------------------- FHtree Prototype ------------------------------
+template <class Object>
+class FHtree
+{
+protected:
+   int mSize;
+   FHtreeNode<Object> *mRoot;
+
+public:
+   FHtree() { mSize = 0; mRoot = NULL; }
+   FHtree(const FHtree &rhs) { mRoot = NULL; mSize = 0; *this = rhs; }
+   virtual ~FHtree() { clear(); }
+   bool empty() const { return (mSize == 0); }
+   int size() const { return mSize; }
+   void clear() { removeNode(mRoot); }
+   const FHtree & operator=(const FHtree &rhs);
+
+   FHtreeNode<Object> *addChild( FHtreeNode<Object> *treeNode, const Object &x );
+
+   FHtreeNode<Object> *find(const Object &x) { return find(mRoot, x); }
+   FHtreeNode<Object> *find(FHtreeNode<Object> *root, 
+      const Object &x, int level = 0);
+
+   bool remove(const Object &x) { return remove(mRoot, x); }
+   bool remove(FHtreeNode<Object> *root, const Object &x);
+   void removeNode(FHtreeNode<Object> *nodeToDelete);   
+
+   // usual client interfaces (entire tree implied)
+   void display() const { display(mRoot, 0); }
+   template <class Processor>
+   void traverse(Processor func) const { traverse(func, mRoot, 0); }
+
+   // recursive helpers
+   void display(FHtreeNode<Object> *treeNode, int level = 0) const;
+   template <class Processor>
+   void traverse(Processor func, FHtreeNode<Object> *treeNode, int level = 0)
+      const;
+
+protected:
+   FHtreeNode<Object> *clone( FHtreeNode<Object> *root) const;
+   void setMyRoots(FHtreeNode<Object> *treeNode);
+};
+
+// FHtree Method Definitions -------------------------------------------------
+template <class Object>
+FHtreeNode<Object>* FHtree<Object>::find(FHtreeNode<Object> *root, 
+   const Object &x, int level)
+{
+   FHtreeNode<Object> *retval;
+ 
+   if (mSize == 0 || root == NULL)
+      return NULL;
+
+   if (root->data == x)
+      return root;
+
+   // otherwise, recurse.  don't process sibs if this was the original call
+   if ( level > 0 && (retval = find(root->sib, x, level)))
+      return retval;
+   return find(root->firstChild, x, level+1);
+}
+
+template <class Object>
+bool FHtree<Object>::remove(FHtreeNode<Object> *root, const Object &x)
+{
+   FHtreeNode<Object> *tn = NULL;
+
+   if (mSize == 0 || root == NULL)
+      return false;
+  
+   if ( (tn = find(root, x)) != NULL )
+   {
+      removeNode(tn);
+      return true;
+   }
+   return false;
+}
+
+template <class Object>
+const FHtree<Object> &FHtree<Object>::operator=
+   (const FHtree &rhs)
+{
+   if (&rhs != this) 
+   {
+      clear();
+      mRoot = clone(rhs.mRoot);
+      mSize = rhs.mSize;
+      setMyRoots(mRoot);
+   }
+   return *this;
+}
+
+template <class Object>
+void FHtree<Object>::removeNode(FHtreeNode<Object> *nodeToDelete)
+{
+   if (nodeToDelete == NULL || mRoot == NULL) 
+      return;
+
+
+   if (nodeToDelete->myRoot != mRoot)
+      return;  // silent error, node does not belong to this tree
+
+   // remove all the children of this node
+   while (nodeToDelete->firstChild)
+      removeNode(nodeToDelete->firstChild);
+
+   if (nodeToDelete->prev == NULL)
+      mRoot = NULL;  // last node in tree
+   else if (nodeToDelete->prev->sib == nodeToDelete)
+      nodeToDelete->prev->sib = nodeToDelete->sib; // adjust left sibling
+   else
+      nodeToDelete->prev->firstChild = nodeToDelete->sib;  // adjust parent
+
+   // adjust the successor sib's prev pointer
+   if (nodeToDelete->sib != NULL)
+      nodeToDelete->sib->prev = nodeToDelete->prev;
+
+   delete nodeToDelete;
+  --mSize;
+}
+
+template <class Object>
+FHtreeNode<Object> *FHtree<Object>::addChild( 
+   FHtreeNode<Object> *treeNode, const Object &x )
+{
+   // empty tree? - create a root node if user passes in NULL
+   if (mSize == 0)
+   {
+      if (treeNode != NULL)
+         return NULL; // silent error something's fishy.  treeNode can't right
+      mRoot = new FHtreeNode<Object>(x, NULL, NULL, NULL);
+      mRoot->myRoot = mRoot;
+      mSize = 1;
+      return mRoot;
+   }
+   if (treeNode == NULL)
+      return NULL; // silent error inserting into a non_null tree with a null parent
+   if (treeNode->myRoot != mRoot)
+      return NULL;  // silent error, node does not belong to this tree
+
+   // push this node into the head of the sibling list; adjust prev pointers
+   FHtreeNode<Object> *newNode = new FHtreeNode<Object>(x, 
+      treeNode->firstChild, NULL, treeNode, mRoot);  // sib, child, prev, root
+   treeNode->firstChild = newNode;
+   if (newNode->sib != NULL)
+      newNode->sib->prev = newNode;
+   ++mSize;
+   return newNode;
+}
+
+template <class Object>
+void FHtree<Object>::display(FHtreeNode<Object> *treeNode, int level) const
+{
+   // this will be static and so will be shared by all calls - a special technique to
+   // be avoided in recursion, usually
+   static string blankString = "                                    ";
+   string indent;
+
+   // stop runaway indentation/recursion
+   if  (level > (int)blankString.length() - 1)
+   {
+      cout << blankString << " ... " << endl;
+      return;
+   }
+
+   if (treeNode == NULL)
+      return;
+
+   indent = blankString.substr(0, level);
+
+   cout << indent << treeNode->data  << endl;
+   display( treeNode->firstChild, level + 1 );
+   if (level > 0)
+      display( treeNode->sib, level );
+}
+
+template <class Object>
+template <class Processor>
+void FHtree<Object>::traverse(Processor func, FHtreeNode<Object> *treeNode, int level)
+   const
+{
+   if (treeNode == NULL)
+      return;
+
+   func(treeNode->data);
+
+   traverse(func, treeNode->firstChild, level+1);
+   if (level > 0)
+      traverse(func, treeNode->sib, level);
+}
+
+template <class Object>
+FHtreeNode<Object> *FHtree<Object>::clone(
+   FHtreeNode<Object> *root) const
+{
+   FHtreeNode<Object> *newNode;
+   if (root == NULL)
+      return NULL;
+
+   // does not set myRoot which must be done by caller
+   newNode = new FHtreeNode<Object>(
+      root->data, 
+      clone(root->sib), clone(root->firstChild));
+
+   // entire subtree is cloned, but wire this node into its sib and first chld
+   if (newNode->sib)
+      newNode->sib->prev = newNode;
+   if (newNode->firstChild)
+      newNode->firstChild->prev = newNode;
+   return newNode;
+}
+
+template <class Object>
+void FHtree<Object>::setMyRoots(FHtreeNode<Object> *treeNode)
+{
+   if (treeNode == NULL)
+      return;
+
+   treeNode->myRoot = mRoot;
+   setMyRoots(treeNode->sib);
+   setMyRoots(treeNode->firstChild);
+}
+
+
+////-------Assignment Classes for Option B-1-----------
+template <class Object>
+class FHsdTreeNode : public FHtreeNode<Object>
+{
+private:
+   bool deleted;
+
+public:
+   FHsdTreeNode(const Object & d = Object(), FHtreeNode *sb = NULL, 
+      FHtreeNode *chld = NULL, FHtreeNode *prv = NULL, 
+      bool dltd = false) :
+      FHtreeNode(d, sb, chld, prv), deleted(dltd)
+   { }
+
+   bool isDeleted() const { return deleted; }
+   FHsdTreeNode *getSibling() const { return (FHsdTreeNode*) sib; }
+   FHsdTreeNode *getFirstChild() const { return (FHsdTreeNode*) firstChild; }
+   FHsdTreeNode *getPrevious() const { return (FHsdTreeNode*) prev; }
+   FHsdTreeNode *getRoot() const { return (FHsdTreeNode*) myRoot; }
+   void setDeleted(bool dltd) { deleted = dltd; } //simple mutator
+   bool setSibling(FHtreeNode *sibling);
+   bool setFirstChild(FHtreeNode *child);
+   bool setPrevious(FHtreeNode *previous);
+   bool setRoot(FHtreeNode *root);
+};
+
+template <class Object>
+class FHsdTree : public FHtree<Object>
+{
+private:
+   //helper function for cloning
+   void setAll(bool setVal);
+   void setAll(FHsdTreeNode<Object> *treeNode, bool setVal,int level);
+
+public:
+   FHsdTreeNode<Object> *addChild( FHsdTreeNode<Object> *treeNode, 
+      const Object &x );
+   FHsdTreeNode<Object> *find(const Object &x);
+   FHsdTreeNode<Object> *find(FHsdTreeNode<Object> *root, 
+      const Object &x, int level = 0);
+   bool remove(const Object &x);
+   bool remove(FHsdTreeNode<Object> *root, const Object &x);
+   void display() const;
+   void display(FHsdTreeNode<Object> *treeNode, int level = 0) const;
+
+   template <class Processor>
+   void traverse(Processor func) const;
+   template <class Processor>
+   void traverse(Processor func, FHsdTreeNode<Object> *treeNode, int level) 
+      const;
+
+   int size() const;
+   int size(FHsdTreeNode<Object> *treeNode, int level, int sz) const;
+
+   void displayPhysical() const;
+   void displayPhysical(FHsdTreeNode<Object> *treeNode,
+      int level) const;
+   int sizePhysical() const { return mSize; }
+
+   const FHsdTree & operator=(const FHsdTree &rhs);
+
+   bool collectGarbage();
+   void collectGarbage(FHsdTreeNode<Object> *treeNode, int level = 0);
+
+   bool empty() const { return size() == 0; }
+
+};
+
+//--------FHsdTreeNode class definitions------------------------
+template <class Object>
+bool FHsdTreeNode<Object>::setSibling(FHtreeNode<Object> *sibling)
+{
+   if (sibling == NULL)
+      return false;
+
+   this->sib = sibling;
+   return true;
+}
+
+template <class Object>
+bool FHsdTreeNode<Object>::setFirstChild(FHtreeNode<Object> *child)
+{
+   if (child == NULL)
+      return false;
+
+   this->firstChild = child;
+   return true;
+}
+
+template <class Object>
+bool FHsdTreeNode<Object>::setPrevious(FHtreeNode<Object> *previous)
+{
+   if (previous == NULL)
+      return false;
+
+   this->prev = previous;
+   return true;
+}
+
+template <class Object>
+bool FHsdTreeNode<Object>::setRoot(FHtreeNode<Object> *root)
+{
+   if (root == NULL)
+      return false;
+
+   this->myRoot = root;
+   return true;
+}
+
+//------------End FHsdTreeNode Definitions--------------
+
+//--------------FHsdTree class Definitions------------
+template <class Object>
+FHsdTreeNode<Object> *FHsdTree<Object>::addChild( 
+   FHsdTreeNode<Object> *treeNode, const Object &x )
+{
+   // empty tree? - create a root node if user passes in NULL
+   if (mSize == 0)
+   {
+      if (treeNode != NULL)
+         return NULL; // silent error something's fishy.  treeNode can't write
+      FHsdTreeNode<Object> *lowRoot;
+      lowRoot = new FHsdTreeNode<Object>(x, NULL, NULL, NULL, false);
+      lowRoot->setRoot(lowRoot);
+      mRoot = lowRoot;
+
+      mSize = 1;
+      return (FHsdTreeNode<Object>*) mRoot;
+   }
+
+   if (treeNode == NULL)
+      return NULL;
+   if (treeNode->getRoot() != mRoot)
+      return NULL;  // silent error, node does not belong to this tree
+
+   // push this node into the head of the sibling list; adjust prev pointers
+   FHsdTreeNode<Object> *newNode = new FHsdTreeNode<Object>(x, 
+      treeNode->getFirstChild(), NULL, treeNode, false);  
+   newNode->setRoot(mRoot);
+   treeNode->setFirstChild(newNode);
+   if (newNode->getSibling() != NULL)
+      newNode->getSibling()->setPrevious(newNode);
+   ++mSize;
+   return (FHsdTreeNode<Object>*)newNode;
+}
+
+template <class Object>
+FHsdTreeNode<Object> *FHsdTree<Object>::find(FHsdTreeNode<Object> *root, 
+      const Object &x, int level = 0)
+{
+   FHsdTreeNode<Object> *retval;
+ 
+   //dont find deleted
+   if (mSize == 0 || root == NULL || root->isDeleted())
+      return NULL;
+
+   if (root->GetData() == x)
+      return root;
+   // otherwise, recurse.  don't process sibs if this was the original call
+   if ( level > 0 && (retval = find(root->getSibling(), x, level)))
+      return (FHsdTreeNode<Object>*)retval;
+   return find(root->getFirstChild(), x, level+1);
+}
+
+template <class Object>
+FHsdTreeNode<Object> *FHsdTree<Object>::find(const Object &x)
+{
+   return find((FHsdTreeNode<Object>*)mRoot, x); 
+}
+
+template <class Object>
+bool FHsdTree<Object>::remove(const Object &x) 
+{ 
+   return remove((FHsdTreeNode<Object>*)mRoot, x); 
+}
+
+template <class Object>
+bool FHsdTree<Object>::remove(FHsdTreeNode<Object> *root, const Object &x)
+{
+   FHsdTreeNode<Object> *tn = NULL;
+
+   if (mSize == 0 || root == NULL || root->isDeleted())
+      return false;
+  
+   if ( (tn = find(root, x)) != NULL)
+   {
+      tn->setDeleted(true);
+      return true;
+   }
+   return false;
+}
+
+template <class Object>
+void FHsdTree<Object>::display()const 
+{ 
+   display(static_cast<FHsdTreeNode<Object>*>(mRoot), 0); 
+}
+
+template <class Object>
+void FHsdTree<Object>::display(FHsdTreeNode<Object> *treeNode, int level)const
+{
+
+   static string blankString = "                                    ";
+   string indent;
+
+   // stop runaway indentation/recursion
+   if  (level > (int)blankString.length() - 1)
+   {
+      cout << blankString << " ... " << endl;
+      return;
+   }
+
+   if (treeNode == NULL)
+      return;
+
+   indent = blankString.substr(0, level);
+   if (!treeNode->isDeleted())
+   {
+      cout << indent << treeNode->GetData() << endl;
+      display(treeNode->getFirstChild(), level + 1);
+   }
+   
+   if (level > 0)
+      display( treeNode->getSibling(), level );
+
+}
+
+template <class Object>
+template <class Processor>
+void FHsdTree<Object>::traverse(Processor func) const 
+{ 
+   traverse(func, static_cast<FHsdTreeNode<Object>*>(mRoot), 0); 
+}
+
+
+template <class Object>
+template <class Processor>
+void FHsdTree<Object>::traverse(Processor func, 
+   FHsdTreeNode<Object> *treeNode, int level)
+   const
+{
+   if (treeNode == NULL || treeNode->isDeleted())
+      return;
+
+   func(treeNode->GetData());
+
+   traverse(func, treeNode->getFirstChild(), level+1);
+   if (level > 0)
+      traverse(func, treeNode->getSibling(), level);
+}
+
+
+template <class Object>
+int FHsdTree<Object>::size() const
+{
+   return size(static_cast<FHsdTreeNode<Object>*>(mRoot), 0, 0);
+}
+
+template <class Object>
+int FHsdTree<Object>::size(FHsdTreeNode<Object>* treeNode, int level
+, int sz) const
+{
+   if (treeNode == NULL)
+      return sz;
+
+   //add to size if not deleted and search for children
+   if (!treeNode->isDeleted())
+   {
+      sz++;
+      sz = size(treeNode->getFirstChild(), level + 1, sz);
+   }
+   
+   //check for siblings, maybe they aren't deleted
+   if (level > 0)
+      sz = size(treeNode->getSibling(), level, sz);
+
+   return sz;
+}
+
+template <class Object>
+void FHsdTree<Object>::displayPhysical() const
+{ 
+   displayPhysical(static_cast<FHsdTreeNode<Object>*>(mRoot), 0); 
+}
+
+template <class Object>
+void FHsdTree<Object>::displayPhysical(FHsdTreeNode<Object> *treeNode,
+   int level) const
+{
+
+   static string blankString = "                                    ";
+   string indent;
+
+   // stop runaway indentation/recursion
+   if  (level > (int)blankString.length() - 1)
+   {
+      cout << blankString << " ... " << endl;
+      return;
+   }
+
+   if (treeNode == NULL)
+      return;
+
+   indent = blankString.substr(0, level);
+
+   cout << indent << treeNode->GetData();
+   if (treeNode->isDeleted())
+      cout << " (D)";
+   cout << endl;
+   displayPhysical( treeNode->getFirstChild(), level + 1 );
+   if (level > 0)
+      displayPhysical( treeNode->getSibling(), level );
+}
+
+template <class Object>
+bool FHsdTree<Object>::collectGarbage()
+{
+   int virtualSize = size();
+   int physicalSize = sizePhysical();
+
+   //no garbage collection can happen
+   if (virtualSize == 0)
+      return false;
+
+   //clean tree if needed
+   if (physicalSize > virtualSize)
+      collectGarbage(static_cast<FHsdTreeNode<Object>*>(mRoot), 0);
+
+   return physicalSize > virtualSize;
+}
+
+template <class Object>
+void FHsdTree<Object>::collectGarbage(FHsdTreeNode<Object> *treeNode,
+   int level = 0) 
+{
+
+   if (treeNode == NULL || mSize == 0)
+      return;
+   if (treeNode->isDeleted())
+   {
+      //preserve the previous node
+      FHsdTreeNode<Object> *previous = treeNode->getPrevious();
+
+      //remove the deleted node
+      removeNode(treeNode);
+
+      //continue collecting garbage 
+      collectGarbage(previous->getFirstChild(), level + 1);
+      if (level > 0 && previous->getSibling() != NULL)
+         collectGarbage(previous->getSibling(), level);
+
+      return;
+   }
+   collectGarbage(treeNode->getFirstChild(), level + 1);
+   if (level > 0)
+      collectGarbage(treeNode->getSibling(), level);
+
+   return;
+}
+
+//ONLY MAKES A PHYSICAL COPY
+//deletion is not preserved
+template <class Object>
+const FHsdTree<Object> &FHsdTree<Object>::operator=
+   (const FHsdTree &rhs)
+{
+   if (&rhs != this) 
+   {
+      clear();
+      mRoot = clone(rhs.mRoot);
+      mSize = rhs.mSize;
+      setMyRoots(mRoot);
+      //default to nondeleted
+      setAll(false); 
+   }
+   return *this;
+}
+
+//helper function for clone
+template <class Object>
+void FHsdTree<Object>::setAll(bool setVal)
+{
+   setAll(static_cast<FHsdTreeNode<Object>*>(mRoot),setVal, 0); 
+}
+
+//recursive version
+template <class Object>
+void FHsdTree<Object>::setAll(FHsdTreeNode<Object> *treeNode, bool setVal, int level)
+{
+   if (treeNode == NULL || mSize == 0)
+      return;
+   
+   treeNode->setDeleted(setVal);
+
+   setAll(treeNode->getFirstChild(), setVal, level+1);
+   if (level > 0)
+      setAll(treeNode->getSibling(), setVal, level);
+
+   return;
+}
+
+//----END FHsdTree Class Definitions---------------------
+
+//---Card class and functions for part B-2------------
+class Card
+{
+public:
+   enum Suit { CLUBS, DIAMONDS, HEARTS, SPADES };
+   static char DEFAULT_VAL;
+   static Suit DEFAULT_SUIT;
+   static const int NUM_CARD_VALS = 13;
+   static const int NUM_CARD_SUITS = 4;
+
+private:
+   char value;
+   Suit suit;
+   bool errorFlag;
+
+public:
+   Card(char value, Suit suit);
+   string toString() const;
+   bool set(char value = DEFAULT_VAL, Suit suit = DEFAULT_SUIT);
+
+   char getVal() { return value; }
+   Suit getSuit() { return suit; }
+   bool getErrorFlag() { return errorFlag; }
+   bool equals(Card card);
+
+   // helpers
+private:
+   static bool isValid(char value, Suit suit);
+
+public:
+    // comparison members and methods  
+   const static char valueRanks[NUM_CARD_VALS];
+   const static Suit suitRanks[NUM_CARD_SUITS];
+
+   int compareTo(Card &other);
+   static int getSuitRank(Suit st);
+   static int getValueRank(char val);
+
+   friend ostream & operator<<(ostream& ostrm, const Card& cardObj);
+};
+
+// global scope methods ----------------------------------------
+typedef list<Card> CardList;
+void insert(CardList &myList, Card &x);
+bool remove(CardList &myList, Card &x);
+bool removeAll(CardList &myList, Card &x);
+
+// for easy comparisons
+int operator==(Card first, Card other)
+   { return first.compareTo(other) == 0; }
+
+// for client Card generation
+Card generateRandomCard();
+
+char Card::DEFAULT_VAL = 'A';
+Card::Suit Card::DEFAULT_SUIT = Card::SPADES;
+
+// for comparisons -- ordering values and ranks
+const char Card::valueRanks[NUM_CARD_VALS]   // const forces correct # initializers
+   = { '2', '3', '4', '5', '6', '7', '8', '9', 'T',
+   'J', 'Q', 'K', 'A'};   
+const Card::Suit Card::suitRanks[NUM_CARD_SUITS] = {Card::CLUBS, Card::DIAMONDS,
+   Card::HEARTS, Card::SPADES};
+
+////////////////////////////////////////
+//                                    //
+//     CARD CLASS DEFINITIONS         //
+//                                    //
+///////////////////////////////////////
+
+
+
+//Overloaded ctor
+//Default values are set to spec. Constructor calls set function to initialize
+//valid overloaded params
+Card::Card(char value = 'A', Suit suit = Card::SPADES)
+{
+   set(value, suit);
+}
+
+string Card::toString() const
+{
+   if (errorFlag)
+      return "[invalid]";
+
+   string ret = string(1, value) + " of ";
+   switch (suit)
+   {
+   case CLUBS:
+      ret += "Clubs";
+      break;
+   case DIAMONDS:
+      ret += "Diamonds";
+      break;
+   case HEARTS:
+      ret += "Hearts";
+      break;
+   case SPADES:
+      ret += "Spades";
+      break;
+   default:
+      break;
+   }
+
+   return ret;
+}
+
+
+
+
+ostream & operator<<(ostream& ostrm, const Card& cardObj)
+{
+   ostrm << cardObj.toString();
+   return ostrm;
+}
+
+//Set passes card value and suit to isValid. returns FALSE if value is
+//invalid and sets errorFlag to true, leaving other private member data
+//untouched. if value passed is valid, errorFlag is true and private
+//fields are set to passed values.
+bool Card::set(char value, Suit suit)
+{
+   if (isValid(value, suit)) 
+   {
+      errorFlag = false;
+      this->value = value;
+      this->suit = suit;
+      return true;
+   }
+
+   else 
+   {
+      errorFlag = true;
+      return false;
+   }
+
+}
+
+// helper
+bool Card::isValid(char value, Suit suit)
+{
+   string upVal = "_";  // string to hold the 1-char value
+   string legalVals = "23456789TJQKA";
+
+   // convert to uppercase to simplify
+   upVal[0] = toupper((int)value);
+
+   // check for validity
+   if ( legalVals.find(upVal) != string::npos )
+      return true;
+   else
+      return false;
+}
+
+bool Card::equals(Card card)
+{
+   if (this->value != card.value)
+      return false;
+   if (this->suit != card.suit)
+      return false;
+   if (this->errorFlag != card.errorFlag)
+      return false;
+   return true;
+}
+
+// comparison method definitions -------------------------------------------
+int Card::compareTo(Card &other)
+{
+   if (this->value == other.value)
+      return ( getSuitRank(this->suit) - getSuitRank(other.suit) );
+   // else
+   return  getValueRank(this->value) - getValueRank(other.value) ;
+}
+
+int Card::getSuitRank(Suit st)
+{
+   int k;
+
+   for (k = 0; k < NUM_CARD_SUITS; k++)
+      if (suitRanks[k] == st)
+         return k;
+
+   // should not happen
+   return 0;
+}
+
+int Card::getValueRank(char val)
+{
+   int k;
+
+   for (k = 0; k < NUM_CARD_VALS; k++)
+      if (valueRanks[k] == val)
+         return k;
+
+   // should not happen
+   return 0;
+}
+
+// end of Card method definitions ------------------------------------
+
+// global scope methods
+Card generateRandomCard()
+{
+   Card::Suit suit;
+   char val;
+
+   suit = (Card::Suit) ( rand() % Card::NUM_CARD_SUITS );
+   val = Card::valueRanks[ rand() % Card::NUM_CARD_VALS ];
+
+   return Card(val, suit);
+}
+
+void insert(CardList &myList, Card &x)
+{
+   list<Card>::iterator iter;
+
+   // loop until we find a float > x
+   for (iter = myList.begin() ; iter != myList.end() ; iter++ )
+      if ( x.compareTo(*iter) < 0 )
+         break;   // found the exact place for this card
+   myList.insert(iter, x);
+}
+
+bool remove(CardList &myList, Card &x)
+{
+   list<Card>::iterator iter;
+
+   // loop until we find or exhaust list
+   for (iter = myList.begin() ; iter != myList.end() ; iter++ )
+      if ( x == *iter )
+      {
+         myList.erase(iter);
+         return true;
+      }
+   return false;
+}
+
+bool removeAll(CardList &myList, Card &x)
+{
+   list<Card>::iterator iter;
+
+   // loop until we find it or exhaust list
+   // reason we use iterator is so return bool gives information
+   for (iter = myList.begin() ; iter != myList.end() ; iter++ )
+      if ( x.compareTo(*iter) == 0 )
+      {
+         //  removes ALL occurences. if only wanted first, use erase(iter)
+         myList.remove(x);
+         return true;
+      }
+   return false;
+}
+
+int main()
+{
+   /*
+   //-------Main #1: SoftDel tree with type String-------
+   FHsdTree<string> sceneTree;
+   FHsdTreeNode<string> *tn;
+
+   // create a scene in a room
+   tn = sceneTree.addChild(NULL, "room");
+
+  // add three objects to the scene tree
+   sceneTree.addChild(tn, "Lily the canine");
+   sceneTree.addChild(tn, "Miguel the human");
+   sceneTree.addChild(tn, "table");
+
+   // add some parts to Miguel
+   tn = sceneTree.find("Miguel the human");
+   // Miguel's left arms
+   tn = sceneTree.addChild(tn, "torso");
+   tn = sceneTree.addChild(tn, "left arm");
+   tn =  sceneTree.addChild(tn, "left hand");
+   sceneTree.addChild(tn, "thumb");
+   sceneTree.addChild(tn, "index finger");
+   sceneTree.addChild(tn, "middle finger");
+   sceneTree.addChild(tn, "ring finger");
+   sceneTree.addChild(tn, "pinky");
+   
+   // Miguel's right arm
+   tn = sceneTree.find("Miguel the human");
+   tn = sceneTree.find(tn, "torso");
+   tn = sceneTree.addChild(tn, "right arm");
+   tn =  sceneTree.addChild(tn, "right hand");
+   sceneTree.addChild(tn, "thumb");
+   sceneTree.addChild(tn, "index finger");
+   sceneTree.addChild(tn, "middle finger");
+   sceneTree.addChild(tn, "ring finger");
+   sceneTree.addChild(tn, "pinky");
+
+   // add some parts to Lily
+   tn = sceneTree.find("Lily the canine");
+   tn = sceneTree.addChild(tn, "torso");
+   sceneTree.addChild(tn, "right front paw");
+   sceneTree.addChild(tn, "left front paw");
+   sceneTree.addChild(tn, "right rear paw");
+   sceneTree.addChild(tn, "left rear paw");
+   sceneTree.addChild(tn, "spare mutant paw");
+   sceneTree.addChild(tn, "wagging tail");
+   
+   // add some parts to table
+   tn = sceneTree.find("table");
+   sceneTree.addChild(tn, "north east leg");
+   sceneTree.addChild(tn, "north west leg");
+   sceneTree.addChild(tn, "south east leg");
+   sceneTree.addChild(tn, "south west leg");
+
+   
+   cout << "\n------------ Loaded Tree ----------------- \n";
+   sceneTree.display();
+
+   sceneTree.remove("spare mutant paw");
+   sceneTree.remove("Miguel the human");
+   sceneTree.remove("an imagined higgs boson");
+
+   cout << "\n------------ Virtual (soft) Tree ----------------- \n";
+   sceneTree.display();
+
+   cout << "\n------------ Physical (hard) Display ----------------- \n";
+   sceneTree.displayPhysical();
+   
+   cout << "------- Testing Sizes (compare with above)----------- \n";
+   cout << "virtual (soft) size: " << sceneTree.size() << endl;
+   cout << "physical (hard) size: " << sceneTree.sizePhysical() << endl;
+   
+   cout << "------------ Collecting Garbage -------------------- \n";
+   cout << "found soft-deleted nodes? "<< sceneTree.collectGarbage() << endl;
+   cout << "immediate collect again? " << sceneTree.collectGarbage() << endl;
+
+   cout << "--------- Hard Display after garb col ------------ \n";
+   sceneTree.displayPhysical();
+
+   cout << "Semi-deleted tree empty? " << sceneTree.empty() << endl << endl;
+   sceneTree.remove("room");
+   cout << "Completely-deleted tree empty? " << sceneTree.empty() << endl << endl;
+   //-----------------------End Main Run 1--------------------
+
+   
+   
+   //-------Main Run #2: SoftDel tree with type Double---------------
+   FHsdTree<double> doubleTree;
+   FHsdTreeNode<double> *dubNode;
+
+   //create a double root
+   dubNode = doubleTree.addChild(NULL, 6.7);
+
+   //add some objects to the tree
+   doubleTree.addChild(dubNode, 33.3);
+   doubleTree.addChild(dubNode, 12.34);
+   doubleTree.addChild(dubNode, 0.0003);
+
+   //add parts to some nodes
+   dubNode = doubleTree.find(33.3);
+   doubleTree.addChild(dubNode, 54253.);
+   doubleTree.addChild(dubNode, 22232.0);
+   doubleTree.addChild(dubNode, 4.1);
+
+   dubNode = doubleTree.find(22232.0);
+   doubleTree.addChild(dubNode, 3.4);
+
+   dubNode = doubleTree.find(12.34);
+   doubleTree.addChild(dubNode, 3.14);
+   doubleTree.addChild(dubNode, -3.14);
+   doubleTree.addChild(dubNode, 2.141);
+
+   cout << "\n------------ Loaded Tree ----------------- \n";
+   doubleTree.display();
+
+   doubleTree.remove(3.14);
+   doubleTree.remove(22232.0);
+   doubleTree.remove(4.1);
+   doubleTree.remove(67);
+
+   cout << "\n------------ Virtual (soft) Tree ----------------- \n";
+   doubleTree.display();
+
+   cout << "\n------------ Physical (hard) Display ----------------- \n";
+   doubleTree.displayPhysical();
+   
+   cout << "------- Testing Sizes (compare with above)----------- \n";
+   cout << "virtual (soft) size: " << doubleTree.size() << endl;
+   cout << "physical (hard) size: " << doubleTree.sizePhysical() << endl;
+   
+   cout << "------------ Collecting Garbage -------------------- \n";
+   cout << "found soft-deleted nodes? "<< doubleTree.collectGarbage() << endl;
+   cout << "immediate collect again? " << doubleTree.collectGarbage() << endl;
+
+   cout << "--------- Hard Display after garb col ------------ \n";
+   doubleTree.displayPhysical();
+
+   cout << "Semi-deleted tree empty? " << doubleTree.empty() << endl << endl;
+   doubleTree.remove(6.7);
+   cout << "Completely-deleted tree empty? " << doubleTree.empty() << endl << endl;
+   //-----------------------End Main Run 2--------------------
+
+   */
+   
+   //Main Run #3: SoftDel tree with type Card------------------
+   FHsdTree<Card> cardTree, cardTreeClone;
+   FHsdTreeNode<Card> *cNode;
+
+   //create a card root
+   cNode = cardTree.addChild(NULL, Card('A', Card::HEARTS));
+
+   //add some objects to the tree
+   cardTree.addChild(cNode, Card());
+   cardTree.addChild(cNode, Card('K', Card::HEARTS));
+   cardTree.addChild(cNode, Card('X',Card::DIAMONDS));
+
+   //add parts to some nodes
+   cNode = cardTree.find(Card('K', Card::HEARTS));
+   cardTree.addChild(cNode, Card('J', Card::HEARTS));
+   cardTree.addChild(cNode, Card('Q', Card::HEARTS));
+   cardTree.addChild(cNode, Card('A',Card::HEARTS));
+
+   cNode = cardTree.find(Card('X',Card::DIAMONDS));
+   cardTree.addChild(cNode, Card('T',Card::CLUBS));
+
+   cNode = cardTree.find(Card('T',Card::CLUBS));
+   cardTree.addChild(cNode, Card('T',Card::SPADES));
+   cardTree.addChild(cNode, Card('T',Card::HEARTS));
+   cardTree.addChild(cNode, Card('T',Card::DIAMONDS));
+
+   cNode = cardTree.find(Card('Q', Card::HEARTS));
+   cardTree.addChild(cNode, Card('5', Card::SPADES));
+   cardTree.addChild(cNode, Card('6', Card::SPADES));
+   cardTree.addChild(cNode, Card('3', Card::SPADES));
+   cardTree.addChild(cNode, Card('9', Card::SPADES));
+
+   cout << "\n------------ Loaded Tree ----------------- \n";
+   cardTree.display();
+   cardTreeClone = cardTree;
+
+   cout << "\n------Loaded Clone Tree ----------------\n";
+   cardTreeClone.display();
+
+   cardTree.remove(Card('T',Card::HEARTS));
+   cardTree.remove(Card('Q',Card::HEARTS));
+   
+   cout << "\n------------ Virtual (soft) Tree + clone ----------------- \n";
+   cardTree.display();
+
+   cout << "\n---clone---\n";
+   cardTreeClone.display();
+
+   cout << "\n------------ Physical tree, real then clone----------------- \n";
+   cardTree.displayPhysical();
+   cout << endl << "------" << endl;
+   cardTreeClone.displayPhysical();
+   
+   cout << "------- Testing Sizes (compare with above)----------- \n";
+   cout << "virtual (soft) size: " << cardTree.size() << endl;
+   cout << "physical (hard) size: " << cardTree.sizePhysical() << endl;
+   cout << "clone (hard) size: " << cardTreeClone.sizePhysical() << endl;
+
+   cout << "------------ Collecting Garbage -------------------- \n";
+   cout << "found soft-deleted nodes? "<< cardTree.collectGarbage() << endl;
+   cout << "immediate collect again? " << cardTree.collectGarbage() << endl;
+
+   cout << "--------- Hard Display after garb col ------------ \n";
+   cardTree.displayPhysical();
+
+   cout << "Semi-deleted tree empty? " << cardTree.empty() << endl << endl;
+   cardTree.remove(Card('A', Card::HEARTS));
+   cout << "Completely-deleted tree empty? " << cardTree.empty() << endl << endl;
+   cardTree.displayPhysical();
+   //-----End Main Run 3-------------------------------------
+
+   
+   int foo;
+   cin >> foo;
+   return 0;
+}
+
+/*********Run of Assignment 9 option B-2**********
+
+============Main Run 1: With String=====================
+------------ Loaded Tree -----------------
+room
+ table
+  south west leg
+  south east leg
+  north west leg
+  north east leg
+ Miguel the human
+  torso
+   right arm
+    right hand
+     pinky
+     ring finger
+     middle finger
+     index finger
+     thumb
+   left arm
+    left hand
+     pinky
+     ring finger
+     middle finger
+     index finger
+     thumb
+ Lily the canine
+  torso
+   wagging tail
+   spare mutant paw
+   left rear paw
+   right rear paw
+   left front paw
+   right front paw
+
+------------ Virtual (soft) Tree -----------------
+room
+ table
+  south west leg
+  south east leg
+  north west leg
+  north east leg
+ Lily the canine
+  torso
+   wagging tail
+   left rear paw
+   right rear paw
+   left front paw
+   right front paw
+
+------------ Physical (hard) Display -----------------
+room
+ table
+  south west leg
+  south east leg
+  north west leg
+  north east leg
+ Miguel the human (D)
+  torso
+   right arm
+    right hand
+     pinky
+     ring finger
+     middle finger
+     index finger
+     thumb
+   left arm
+    left hand
+     pinky
+     ring finger
+     middle finger
+     index finger
+     thumb
+ Lily the canine
+  torso
+   wagging tail
+   spare mutant paw (D)
+   left rear paw
+   right rear paw
+   left front paw
+   right front paw
+------- Testing Sizes (compare with above)-----------
+virtual (soft) size: 13
+physical (hard) size: 30
+------------ Collecting Garbage --------------------
+found soft-deleted nodes? 1
+immediate collect again? 0
+--------- Hard Display after garb col ------------
+room
+ table
+  south west leg
+  south east leg
+  north west leg
+  north east leg
+ Lily the canine
+  torso
+   wagging tail
+   left rear paw
+   right rear paw
+   left front paw
+   right front paw
+Semi-deleted tree empty? 0
+
+Completely-deleted tree empty? 1
+
+
+=======Main Run 2: With Double==================
+
+------------ Loaded Tree -----------------
+6.7
+ 0.0003
+ 12.34
+  2.141
+  -3.14
+  3.14
+ 33.3
+  4.1
+  22232
+   3.4
+  54253
+
+------------ Virtual (soft) Tree -----------------
+6.7
+ 0.0003
+ 12.34
+  2.141
+  -3.14
+ 33.3
+  54253
+
+------------ Physical (hard) Display -----------------
+6.7
+ 0.0003
+ 12.34
+  2.141
+  -3.14
+  3.14 (D)
+ 33.3
+  4.1 (D)
+  22232 (D)
+   3.4
+  54253
+------- Testing Sizes (compare with above)-----------
+virtual (soft) size: 7
+physical (hard) size: 11
+------------ Collecting Garbage --------------------
+found soft-deleted nodes? 1
+immediate collect again? 0
+--------- Hard Display after garb col ------------
+6.7
+ 0.0003
+ 12.34
+  2.141
+  -3.14
+ 33.3
+  54253
+Semi-deleted tree empty? 0
+
+Completely-deleted tree empty? 1
+
+
+========Main Run 3: With Card==============
+
+
+------------ Loaded Tree -----------------
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Hearts
+   T of Spades
+ K of Hearts
+  A of Hearts
+  Q of Hearts
+   9 of Spades
+   3 of Spades
+   6 of Spades
+   5 of Spades
+  J of Hearts
+ A of Spades
+
+------Loaded Clone Tree ----------------
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Hearts
+   T of Spades
+ K of Hearts
+  A of Hearts
+  Q of Hearts
+   9 of Spades
+   3 of Spades
+   6 of Spades
+   5 of Spades
+  J of Hearts
+ A of Spades
+
+------------ Virtual (soft) Tree + clone -----------------
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Spades
+ K of Hearts
+  A of Hearts
+  J of Hearts
+ A of Spades
+
+---clone---
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Hearts
+   T of Spades
+ K of Hearts
+  A of Hearts
+  Q of Hearts
+   9 of Spades
+   3 of Spades
+   6 of Spades
+   5 of Spades
+  J of Hearts
+ A of Spades
+
+------------ Physical tree, real then clone-----------------
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Hearts (D)
+   T of Spades
+ K of Hearts
+  A of Hearts
+  Q of Hearts (D)
+   9 of Spades
+   3 of Spades
+   6 of Spades
+   5 of Spades
+  J of Hearts
+ A of Spades
+
+------
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Hearts
+   T of Spades
+ K of Hearts
+  A of Hearts
+  Q of Hearts
+   9 of Spades
+   3 of Spades
+   6 of Spades
+   5 of Spades
+  J of Hearts
+ A of Spades
+------- Testing Sizes (compare with above)-----------
+virtual (soft) size: 9
+physical (hard) size: 15
+clone (hard) size: 15
+------------ Collecting Garbage --------------------
+found soft-deleted nodes? 1
+immediate collect again? 0
+--------- Hard Display after garb col ------------
+A of Hearts
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Spades
+ K of Hearts
+  A of Hearts
+  J of Hearts
+ A of Spades
+Semi-deleted tree empty? 0
+
+Completely-deleted tree empty? 1
+
+A of Hearts (D)
+ [invalid]
+  T of Clubs
+   T of Diamonds
+   T of Spades
+ K of Hearts
+  A of Hearts
+  J of Hearts
+ A of Spades
+
+
+
+*/

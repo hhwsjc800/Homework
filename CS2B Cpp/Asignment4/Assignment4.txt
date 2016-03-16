@@ -1,0 +1,809 @@
+#include <iostream>
+#include <string>
+#include <climits>
+#include <cmath>
+#include <sstream>
+#include <ctime>       
+#include <stdlib.h> 
+using namespace std;
+
+// IntPair allows public, no filtering; classes that use it will protect it
+class IntPair
+{
+public:
+   long firstInt;
+   long secondInt;
+
+   IntPair() { firstInt = secondInt = 0; }
+   IntPair(long frst, long scnd) { firstInt = frst;  secondInt = scnd; }
+   string toString() const;
+};
+
+
+// helper  class IntPair method definitions ----------------------------------
+string IntPair::toString() const
+{
+   ostringstream cnvrt1, cnvrt2;
+   string retString;
+
+   cnvrt1 << firstInt;
+   cnvrt2 << secondInt;
+
+   retString = "(" + cnvrt1.str() + ", " + cnvrt2.str() + ")";
+
+   return retString;
+}
+
+// EncryptionSupport contains only static methods that clients can use wherever
+// all method names should be fairly descriptive other than inverseModN(),
+// which you can take as a black-box (see description of assignment)
+class EncryptionSupport
+{
+public:
+   static bool isPrime(long x);
+   static long inverseModN(long a, long n);
+   static long getSmallRandomPrime();
+   static long getMedSizedRandomPrime();
+};
+
+
+// class EncryptionSupport method definitions --------------------------------
+bool EncryptionSupport::isPrime(long x)
+{
+   long k, loopLim;
+
+   if (x < 2)
+      return false;
+   if (x < 4)
+      return true;
+   if (x % 2 == 0 || x % 3 == 0)
+      return false;
+
+   // now use the fact the all primes of form 6k +/- 1
+   loopLim = (long)sqrt(x);
+   for (k = 5; k <= loopLim; k += 6)
+   {
+      if (x % k == 0 || x % (k + 2) == 0)
+         return false;
+   }
+   return true;
+}
+
+long EncryptionSupport::getSmallRandomPrime()
+{
+   int index;
+   long lowPrimes[] =
+   {
+      19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67,
+      71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
+      127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
+      179, 181, 191, 193, 197, 199, 211, 223, 227, 229,
+      233, 239, 241, 251, 257, 263, 269, 271, 277, 281,
+      283, 293, 307, 311, 313, 317, 331, 337, 347, 349,
+      353, 359, 367, 373, 379, 383, 389, 397, 401, 409,
+      419, 421, 431, 433, 439, 443, 449, 457, 461, 463,
+      467, 479, 487, 491, 499, 503, 509, 521, 523, 541
+   };
+   short arraySize = sizeof(lowPrimes) / sizeof(lowPrimes[0]);
+
+   // pick prime in the above array btween 0 and arraySize - 1
+   index = (int)(rand() % (arraySize - 1));
+   return lowPrimes[index];
+}
+
+long EncryptionSupport::getMedSizedRandomPrime()
+{
+   int index;
+   long medPrimes[] =
+   {
+      541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607,
+      613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677,
+      683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761,
+      769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853,
+      857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937,
+      941, 947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013, 1019,
+      1021, 1031, 1033, 1039, 1049, 1051, 1061, 1063, 1069, 1087,
+      1091, 1093, 1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153,
+      1163, 1171, 1181, 1187, 1193, 1201, 1213, 1217, 1223,
+   };
+   short arraySize = sizeof(medPrimes) / sizeof(medPrimes[0]);
+
+   // pick prime in the above array bet 0 and arraySize - 1
+   index = (int)(rand() % (arraySize - 1));
+
+   return medPrimes[index];
+}
+
+long EncryptionSupport::inverseModN(long a, long n)
+{
+   // uses extended euclidean algorithm giving as + nt = gcd(n, a), 
+   // with gcd(n, a) = 1,  and s, t discovered.  s = 1/a, and t ignored
+
+   long s, t, r, s_prev, t_prev, r_prev, temp, q, inverse;
+
+   // special key encryption conditions;  we will pick some prime e >= 3 for a
+   if (a < 3 || a >= n || !isPrime(a))
+      return 0;  // error
+
+                 // we are now guaranteed 3 <= a < n and gcd(a, n) = 1;
+
+                 // initialize working variables
+   s = 0;         t = 1;         r = n;
+   s_prev = 1;    t_prev = 0;    r_prev = a;
+
+   while (r != 0)
+   {
+      q = r_prev / r;
+
+      temp = r;
+      r = r_prev - q * r;
+      r_prev = temp;
+
+      temp = s;
+      s = s_prev - q * s;
+      s_prev = temp;
+
+      temp = t;
+      t = t_prev - q * t;
+      t_prev = temp;
+   }
+
+   inverse = s_prev % n;
+   if (inverse < 0)
+      inverse += n;
+   return inverse;
+}
+
+// Class InternetUser  ------------------------------
+class InternetUser
+{
+public:
+   static const int MIN_NAME_LENGTH = 2;
+   static const int MAX_NAME_LENGTH = 50;
+   static const int MIN_IP_LENGTH = 7;
+   static const int MAX_IP_LENGTH = 15; 
+   static const string DEFAULT_IP;
+   static const string DEFAULT_NAME;
+   InternetUser();
+   InternetUser(string name, string ip);
+   string getName() const { return name; }
+   string getIp() const { return ip; }
+   bool setName(string nameTest);
+   bool setIp(string ipTest);
+   string toString() const;
+
+private:
+   string name;
+   string ip;
+   static bool isValidIp(string ipTest);
+   static bool isValidName(string nameTest);
+};
+
+// Derived Class Communicator  ------------------------------
+class Communicator: public InternetUser
+{
+public:
+   static const int ERROR_FLAG_NUM = 0;
+   static const long MAX_PQ;
+   Communicator();
+   Communicator(long firstPrime, long secondPrime);
+   Communicator(string name, string ip);
+   Communicator(string name, string ip, long firstPrime, long secondPrime);
+   bool setPrimes(long firstPrime, long secondPrime);
+   bool computeBothEncrKeys(long p, long q);
+   IntPair getPublicKey() const { return publicKey; }
+   IntPair getPrivateKey() const { return privateKey; }
+   string toString() const;
+
+private:
+   IntPair publicKey;
+   IntPair privateKey;
+   long firstPrime;
+   long secondPrime;
+   long n, phi, e, d;
+   //---helper functions---
+   void setAll(int value); 
+   static bool validPrimes(long p, long q); 
+
+};
+
+//**** OPTION B ADDITIONS*****************
+
+// Class StackNode  ----------------------------------
+class StackNode
+{ 
+ public:
+   StackNode *next;
+
+   StackNode();
+   virtual ~StackNode();
+   void show();
+};
+
+// Class Stack ---------------------------------------
+class Stack
+{
+   StackNode *top;
+ 
+ public:
+   Stack();
+   virtual ~Stack();
+   void push(StackNode  *newNode);
+   StackNode *pop();
+   void showStack();
+};
+
+// Class IuNode----------------
+class IuNode : public StackNode
+{
+ private:
+   InternetUser data;
+ public:
+   IuNode(InternetUser x);
+   string toString();
+   InternetUser getData();
+};
+
+// Class IuStack------------
+class IuStack : private Stack
+{
+ public:
+   ~IuStack();  // needed this time
+   void push(InternetUser x);
+   bool pop(InternetUser &iu);
+};
+
+//**** END OPTION B ADDITIONS*****************
+
+//////////////////////////////////////
+//                                  //
+//  InternetUser CLASS DEFINITIONS  //
+//                                  //
+/////////////////////////////////////
+
+//---class constants
+const string InternetUser::DEFAULT_IP = "0.0.0.0";
+const string InternetUser::DEFAULT_NAME = "(undefined)";
+
+//---class methods
+InternetUser::InternetUser()
+{
+   name = DEFAULT_NAME;
+   ip = DEFAULT_IP;
+}
+
+InternetUser::InternetUser(string name, string ip)
+{
+   if (!setName(name))
+      this->name = DEFAULT_NAME;
+   if (!setIp(ip))
+      this->ip = DEFAULT_IP;
+}
+
+bool InternetUser::isValidName(string nameTest)
+{
+   if (nameTest.length() < MIN_NAME_LENGTH ||
+      nameTest.length() > MAX_NAME_LENGTH)
+      return false;
+   return true;
+}
+
+bool InternetUser::isValidIp(string ipTest)
+{
+   if (ipTest.length() < MIN_IP_LENGTH ||
+      ipTest.length() > MAX_IP_LENGTH)
+      return false;
+   
+   return true;
+}
+
+bool InternetUser::setName(string nameTest)
+{
+   if (!isValidName(nameTest))
+      return false;
+   name = nameTest;
+   return true;
+}
+
+bool InternetUser::setIp(string ipTest)
+{
+   if (!isValidIp(ipTest))
+      return false;
+   ip = ipTest;
+   return true;
+}
+
+string InternetUser::toString() const
+{
+   string returnString = "Name: ";
+   returnString += name + "\n";
+   returnString += "IP Address: " + ip + "\n";
+
+   return returnString;
+}
+//////End InternetUser Class Definitions////////////
+
+//////////////////////////////////////
+//                                  //
+//  Communicator CLASS DEFINITIONS  //
+//                                  //
+/////////////////////////////////////
+
+//---class constants
+const long Communicator::MAX_PQ = sqrt(LONG_MAX);
+
+//---class methods
+Communicator::Communicator() 
+{
+   setAll(ERROR_FLAG_NUM);
+}
+
+Communicator::Communicator(long firstPrime, long secondPrime)
+{
+   if (!setPrimes(firstPrime, secondPrime))
+      setAll(ERROR_FLAG_NUM);
+}
+   
+
+Communicator::Communicator(string name, string ip) : InternetUser(name, ip)
+{
+   setAll(ERROR_FLAG_NUM);
+}
+
+Communicator::Communicator(string name, string ip, 
+   long firstPrime, long secondPrime) : InternetUser(name, ip)
+{
+   if (!setPrimes(firstPrime, secondPrime))
+      setAll(ERROR_FLAG_NUM);
+}
+
+bool Communicator::setPrimes(long firstPrime, long secondPrime)
+{
+   if (validPrimes(firstPrime, secondPrime))
+   {
+      this->firstPrime = firstPrime;
+      this->secondPrime = secondPrime;
+      computeBothEncrKeys(firstPrime, secondPrime);
+      return true;
+   }
+   return false;
+}
+
+bool Communicator::computeBothEncrKeys(long p, long q)
+{
+   if (!validPrimes(p,q))
+      return false;
+
+   n = p * q;
+   phi = (p - 1) * (q - 1);
+   int attemptCount = 0; // place a limit on tries
+
+   while (e > phi || e <= 0 || phi % e == 0 && 
+         attemptCount < 1000)
+   {
+      e = EncryptionSupport::getSmallRandomPrime();
+      attemptCount++;
+   }
+
+   if (e > phi || e <= 0 || phi % e == 0)
+   {
+      e = ERROR_FLAG_NUM;
+      return false;
+   }
+
+   d = EncryptionSupport::inverseModN(e, n);
+   publicKey = IntPair(e, n);
+   privateKey = IntPair(d, n);
+
+   return true;
+}
+
+string Communicator::toString() const
+{
+   string returnString = InternetUser::toString();
+   returnString += "public key: " + publicKey.toString() + "\n" +
+                   "private key: " + privateKey.toString() + "\n";
+
+   returnString += "(firstPrime, secondPrime): (" + to_string(firstPrime) +
+                   ", " + to_string(secondPrime) + ")\n";
+
+   returnString += "n, É”, e, d: " + to_string(n) + ", " + to_string(phi) + 
+                   ", " + to_string(e) + ", " + to_string(d) + "\n\n";
+
+   return returnString;
+}
+
+//----private helper functions for class----
+void Communicator::setAll(int value)
+{
+   publicKey.firstInt = publicKey.secondInt = value;
+   privateKey.firstInt = privateKey.secondInt = value;
+   phi = e = n = d = value;
+   firstPrime = secondPrime = value;
+}
+
+bool Communicator::validPrimes(long p, long q)
+{
+   if (EncryptionSupport::isPrime(p) &&
+      EncryptionSupport::isPrime(q) &&
+      p <= MAX_PQ &&
+      q <= MAX_PQ &&
+      p != q)
+      return true;
+   return false;
+}
+
+/////////End Communicator Class Definitions/////////////
+
+//**** OPTION B ADDITIONS*****************
+
+//////////////////////////////////////
+//                                  //
+//  StackNode CLASS DEFINITIONS     //
+//                                  //
+/////////////////////////////////////
+
+StackNode::StackNode()
+{
+   next = NULL;
+}
+StackNode::~StackNode()
+{
+   // nothing needed
+}
+void StackNode::show()
+{
+   cout << "(generic node) ";
+}
+// end StackNode method definitions ---------------------
+
+
+// Stack method definitions --------------------------
+Stack::Stack()
+{
+   top = NULL;
+}
+
+Stack::~Stack()
+{
+   // don't delete the stack nodes on the stack - they belong to client.
+   // nothing to do. If we were cloning nodes in push() then we would need
+   // to delete the remainder of the list - but we are not cloning nodes
+   // in this class.
+}
+  
+StackNode *Stack::pop()
+{
+   StackNode *temp;
+  
+   temp = top;
+   if (top != NULL)
+   {
+      top = top->next;   
+      temp->next = NULL;   // don't give client access to stack!
+   }
+   return temp;           
+}
+
+//////////////////////////////////////
+//                                  //
+//  Stack CLASS DEFINITIONS         //
+//                                  //
+/////////////////////////////////////
+
+
+void Stack::push(StackNode  *newNode)
+{   
+   if (newNode == NULL) 
+      return;   // emergency return
+   newNode->next = top;
+   top = newNode;
+}  
+
+void Stack::showStack()
+{   
+   StackNode *p;
+    
+   // Display all the nodes in the stack
+   for( p = top; p != NULL; p = p->next )
+      p->show();
+}  
+
+// end Stack method definitions ---------------------
+
+//////////////////////////////////////
+//                                  //
+//  IuNode CLASS DEFINITIONS        //
+//                                  //
+/////////////////////////////////////
+IuNode::IuNode(InternetUser x)
+{
+   data = x;
+}
+
+string IuNode::toString()
+{
+   return data.toString();
+}
+
+InternetUser IuNode::getData()
+{
+   return data;  // simple accessor
+}
+// end IuNode method definitions ---------------------
+
+//////////////////////////////////////
+//                                  //
+//  IuStack CLASS DEFINITIONS       //
+//                                  //
+/////////////////////////////////////
+
+void IuStack::push(InternetUser x)
+{
+   // create a new IuNode
+   IuNode *iuPtr = new IuNode(x);
+
+   // push the StackNode onto the stack (base class call)
+   Stack::push(iuPtr);
+}
+
+bool IuStack::pop(InternetUser &iu)
+{
+
+   // pop a node
+   IuNode *iuPtr = (IuNode *)Stack::pop();
+   if (iuPtr == NULL)
+      return false;
+   
+   // copy the data into the formal parameter
+   iu = iuPtr->getData();
+
+   delete iuPtr; // delete the node (we're done with it)
+   return true;
+}
+
+IuStack::~IuStack()
+{
+   // because we are creating our own StackNodes internally, we
+   // do have to destroy any lingering nodes here.
+   StackNode *np;
+
+   while (np = Stack::pop())
+      delete np;
+}
+// end IuStack method definitions ---------------------
+
+//******** END OPTION B ADDITIONS*****************
+
+
+//*******First main (OPTION A)*******
+int main()
+{
+
+   //----InternetUser Class Tests
+   InternetUser internet1, internet2("n", "69"), internet3;
+   internet3 = InternetUser("Joey", "9.8.7.6");
+   internet2.setName("Han Solo");
+
+   cout << "---InternetUser Class Tests: \n\n Initial Members: \n"
+      << internet1.toString() << internet2.toString() << internet3.toString()
+      << endl << endl;
+
+   //----Test Accessors: 
+   cout << "---Testing accessors: \n"
+      << internet2.getName() << " " << internet2.getIp() << " "
+      << internet3.getName() << " " << internet3.getIp() << endl << endl;
+
+   //----Test mutators: 
+   cout << "---Testing mutators: \n";
+   if (internet1.setName("Billy Bob"))
+      cout << "Successfully changed name of internet1 \n";
+   else
+      cout << "Failed to change name of internet1\n";
+   
+   if (internet2.setIp("1234.5.6.7.8.999999."))
+      cout << "Successfully changed IP of internet2\n";
+   else
+      cout << "Failed to change ip of internet2 (expected)\n";
+
+   if (internet3.setName("A"))
+      cout << "Successfully changed name of internet3!\n\n";
+   else
+      cout << "Failed to change internet3 name (expected) \n\n";
+
+   cout << "---End base class tests------------ \n\n";
+   
+   //----End Base Class Tests
+
+   //---Communicator Class Tests---
+   cout << "----Begin derived class tests:------ \n\n";
+
+   Communicator comm1, comm2("Jerry", "33"), comm3(31,50), 
+                comm4("Joseph", "120.0.0.1", 53, 23);
+
+   //---Display instantiated objects
+   cout << "---Displaying instantiated objects of derived class \n\n";
+   cout << comm1.toString() << endl << comm2.toString() << endl 
+        << comm3.toString() << endl << comm4.toString();
+   cout << "------------------------" << endl << endl;
+
+   comm1.setPrimes(107, 109);
+   comm1.setName("Mike Loceff");
+   comm1.setIp("1.2.3.4");
+
+   comm2.setIp("33.44.55.66");
+   comm2.setPrimes(107, 109);
+
+   comm3.setName("Ray Both");
+   comm3.setPrimes(907, 1087); 
+
+   comm4.setPrimes(100000000, 30000000);
+
+   //---Display mutated objects
+   cout << "---Displaying mutated objects of derived class --- \n\n";
+   cout << comm1.toString() << endl << comm2.toString() << endl 
+        << comm3.toString() << endl << comm4.toString();
+   cout << "------------------------" << endl << endl;
+
+   //---Testing accessor
+   cout << "---Accessor test of derived class --- \n\n";
+   cout << "PrivKey comm1: " << comm1.getPrivateKey().toString() << endl
+        << "PubKey comm2: " << comm2.getPublicKey().toString() << endl 
+        << "PrivKey comm3: " << comm3.getPrivateKey().toString() << endl 
+        << "PubKey comm4: " << comm4.getPublicKey().toString() << endl
+        << "PrivKey comm4: " << comm4.getPrivateKey().toString() << endl;
+   cout << "------------------------" << endl << endl;
+
+   int foo;
+   cin >> foo;
+   return 0;
+}
+
+//*********SECOND MAIN (OPTION B)********************
+/*
+int main()
+{
+   IuStack iuStk;
+   InternetUser iu;
+
+   iuStk.push(InternetUser("Bob", "1.2.3.4"));
+   iuStk.push(InternetUser());
+   iuStk.push(InternetUser("Obi", "6.5.4.3"));
+   iuStk.push(InternetUser("Joey", "9.8.7.6"));
+   iuStk.push(InternetUser("MikeLo", "120.0.0.1"));
+   iuStk.push(Communicator("Rei", "2.4.6.8", 107, 109));
+   
+   for (int k = 0; k < 10; k++)
+      if (iuStk.pop(iu))
+         cout << iu.toString() << " ";
+      else
+         cout << "(empty stack) ";
+   cout << endl;
+
+   int foo;
+   cin >> foo;
+   return 0;
+}
+*/
+
+/**********OUTPUT OF OPTION A*****************
+---InternetUser Class Tests:
+
+ Initial Members:
+Name: (undefined)
+IP Address: 0.0.0.0
+Name: Han Solo
+IP Address: 0.0.0.0
+Name: Joey
+IP Address: 9.8.7.6
+
+
+---Testing accessors:
+Han Solo 0.0.0.0 Joey 9.8.7.6
+
+---Testing mutators:
+Successfully changed name of internet1
+Failed to change ip of internet2 (expected)
+Failed to change internet3 name (expected)
+
+---End base class tests------------
+
+----Begin derived class tests:------
+
+---Displaying instantiated objects of derived class
+
+Name: (undefined)
+IP Address: 0.0.0.0
+public key: (0, 0)
+private key: (0, 0)
+(firstPrime, secondPrime): (0, 0)
+n, É”, e, d: 0, 0, 0, 0
+
+
+Name: Jerry
+IP Address: 0.0.0.0
+public key: (0, 0)
+private key: (0, 0)
+(firstPrime, secondPrime): (0, 0)
+n, É”, e, d: 0, 0, 0, 0
+
+
+Name: (undefined)
+IP Address: 0.0.0.0
+public key: (0, 0)
+private key: (0, 0)
+(firstPrime, secondPrime): (0, 0)
+n, É”, e, d: 0, 0, 0, 0
+
+
+Name: Joseph
+IP Address: 120.0.0.1
+public key: (227, 1219)
+private key: (682, 1219)
+(firstPrime, secondPrime): (53, 23)
+n, É”, e, d: 1219, 1144, 227, 682
+
+------------------------
+
+---Displaying mutated objects of derived class ---
+
+Name: Mike Loceff
+IP Address: 1.2.3.4
+public key: (379, 11663)
+private key: (3662, 11663)
+(firstPrime, secondPrime): (107, 109)
+n, É”, e, d: 11663, 11448, 379, 3662
+
+
+Name: Jerry
+IP Address: 33.44.55.66
+public key: (443, 11663)
+private key: (10215, 11663)
+(firstPrime, secondPrime): (107, 109)
+n, É”, e, d: 11663, 11448, 443, 10215
+
+
+Name: Ray Both
+IP Address: 0.0.0.0
+public key: (37, 985909)
+private key: (559570, 985909)
+(firstPrime, secondPrime): (907, 1087)
+n, É”, e, d: 985909, 983916, 37, 559570
+
+
+Name: Joseph
+IP Address: 120.0.0.1
+public key: (227, 1219)
+private key: (682, 1219)
+(firstPrime, secondPrime): (53, 23)
+n, É”, e, d: 1219, 1144, 227, 682
+
+------------------------
+
+---Accessor test of derived class ---
+
+PrivKey comm1: (3662, 11663)
+PubKey comm2: (443, 11663)
+PrivKey comm3: (559570, 985909)
+PubKey comm4: (227, 1219)
+PrivKey comm4: (682, 1219)
+------------------------
+
+************END OPTION A OUTPUT******************/
+
+/**********OUTPUT OF OPTION B*****************
+Name: Rei
+IP Address: 2.4.6.8
+ Name: MikeLo
+IP Address: 120.0.0.1
+ Name: Joey
+IP Address: 9.8.7.6
+ Name: Obi
+IP Address: 6.5.4.3
+ Name: (undefined)
+IP Address: 0.0.0.0
+ Name: Bob
+IP Address: 1.2.3.4
+ (empty stack) (empty stack) (empty stack) (empty stack)
+
+***************************************************/
