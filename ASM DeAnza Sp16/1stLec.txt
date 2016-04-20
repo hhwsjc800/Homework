@@ -1,0 +1,47 @@
+ASM
+
+-Contingent upon Architecture: Intel 32 (bit environment)
+-Microsoft environment: MASM (Microsoft Micro Assembler)
+-Need VS
+
+Name: Kamran Eftekhari, Ph.D CompSci Umich->MIT->Carnegie Mellon->NSA->Director of machine learning division at Google
+
+book: Assembly Language on the interwobz
+
+Virtualization: hide reality of memory, give nice physical picture
+
+3eme:
+-Living in memory, i.e a process -- what is a structure of a process?
+--Converting process into a file that machine can understand
+-must understand all these details for compsci
+-for all of this, need to know how data is represented in a computer
+
+==Enterprise software usually has all elements of computer science:
+.. architecture
+.. operating system
+.. networking
+
+recommended book: Computer Systems, Pearson
+
+--Without cache, then need to wait for days for each program
+
+
+===Interview question: which program is cache-friendly?
+..how to program/code in order to be cache-friendly?
+..will provide lectures based on Computer Systems and Orgainzation 
+
+--Book is based on Intel notation (Bay area notation is ATNT)
+
+
+
+============
+
+-must end main with end main
+ex:
+main someFunc
+mov eax, 5
+add eax, 5
+
+invoke exitProcess, 0
+someFunc Endp
+end someFunc
